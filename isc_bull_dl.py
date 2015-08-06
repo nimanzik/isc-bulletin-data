@@ -10,17 +10,13 @@ import argparse
 parser = argparse.ArgumentParser(prog='ISC_bulletin_dl',
                                  description='Download ISC bulletin dataset.')
 
-###
-# Geographic region
-###
+### Geographic region ###
 parser.add_argument("--search",
                     dest="searchshape",
                     required=True,
                     choices=["GLOBAL","RECT","CIRC","POLY"])
 
-###
-# RECT (rectangular) search type
-###
+### RECT (rectangular) search type ###
 rect_group = parser.add_argument_group(title='RECT-rectangular search',
                                        description='Dependent parameters for --search=RECT')
 rect_group.add_argument('--blat',
@@ -36,9 +32,7 @@ rect_group.add_argument('--rlon',
                         dest='right_lon',
                         help='Right longitude of rectangular region (-180 to 180).')
 
-###
-# CIRC (circular) search type
-###
+### CIRC (circular) search type ###
 circ_group = parser.add_argument_group(title='CIRC-circular search',
                                        description='Dependent parameters for --search=CIRC')
 circ_group.add_argument('--clat',
@@ -56,9 +50,7 @@ circ_group.add_argument('--radius',
                         help="Radius for circular search region: 0 to 180 " +\
                              "if --units=deg, 0 to 20015 if --units=km.")
 
-###
-# POLY (customised polygon) search type
-###
+### POLY (customised polygon) search type ###
 poly_group = parser.add_argument_group(title='POLY-polygon search',
                                        description='Dependent parameters for --search=POLY')
 poly_group.add_argument('--coords',
@@ -68,9 +60,7 @@ poly_group.add_argument('--coords',
                              "and southern hemispheres should be negative. " +\
                              "(lat1,lon1,lat2,lon2,...,latN,lonN,lat1,lon1)")
 
-###
-# Time range
-###
+### Time range ###
 parser.add_argument("--syear",
                     dest="start_year",
                     required=True,
@@ -112,15 +102,11 @@ parser.add_argument("--etime",
                     required=True,
                     help="Ending time for events HH:MM:SS (00:00:00 to 23:59:59).")
 
-###
-# Depth limits
-###
+### Depth limits ###
 parser.add_argument("--Zmin", dest="min_dep", help="Minimum depth of events (km).")
 parser.add_argument("--Zmax", dest="max_dep", help="Maximum depth of events (km).")
 
-###
-# Magnitude limits
-###
+### Magnitude limits ###
 parser.add_argument("--Mmin", dest="min_mag", help="Minimum magnitude of events.")
 parser.add_argument("--Mmax", dest="max_mag", help="Maximum magnitude of events.")
 
@@ -137,9 +123,7 @@ parser.add_argument('--Magcy',
                          'agency: {Any, prime, CODE (specific agency code)}.')
 
 
-###
-# Defining phases limits
-###
+### Defining phases limits ###
 parser.add_argument('--DPmin', dest='min_def', help='Minimum number of defining phases.')
 parser.add_argument('--DPmax', dest='max_def', help='Maximum number of defining phases.')
 
@@ -168,9 +152,8 @@ def verify_search_opts(options):
     global args
     if not all([getattr(args,name) for name in options]):
         msg = "Missing argument(s) for defined search shape. " +\
-              "Check the dependent parameters for each search type."
+              "Check the dependent parameters for your considered search type."
         parser.error(msg)
-#    if any()
 
 options = get_search_opts(args.searchshape)
 verify_search_opts(options)
