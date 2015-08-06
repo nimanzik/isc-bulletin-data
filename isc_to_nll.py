@@ -2,8 +2,6 @@
 Read and parse ISC bulletin of event data (in ISF format), and write a phase
 data file (in NLLOC_OBS format) per event listed in the bulletin.
 
-@author:  nima.nooshiri@gfz-potsdam.de
-          nima.nooshiri@gmail.com
 @created: May 2015; Potsdam, Germany
 """
 
@@ -175,10 +173,8 @@ class ISCBull2NLLocObs(object):
         sys.stdout.write("Number of saved phase/arrival data files = ")
         last_lenght = 0
         for i, event in enumerate(split_bulletin):
-            ###
             # Display a progress bar on the screen
             # ('\b' generally moves the cursor back by one space)
-            ###
             if (i+1)%50 == 0 or (i+1)==nEvents:
                 sys.stdout.write('\b' * last_lenght)    # go back
                 sys.stdout.write(' ' * last_lenght)     # clear last name
@@ -194,9 +190,7 @@ class ISCBull2NLLocObs(object):
 
             eventID = lines[0].split()[0]
 
-            ###
-            # READ ORIGIN BLOCK
-            ###
+            ### READ ORIGIN BLOCK ###
             origin_block = lines[2]
 
             origin_date = dt.datetime.strptime(origin_block[0:10].strip(), "%Y/%m/%d")
@@ -238,9 +232,7 @@ class ISCBull2NLLocObs(object):
             events.columns = ["Date", "Time", "Latitude", "Longitude", "Depth"]
             events.index.names = ["Event"]
 
-            ###
-            # READ PHASE BLOCK
-            ###
+            ### READ PHASE BLOCK ###
             phase_block = lines[4:]
             phase_block_dic = {}
             for line in phase_block:
@@ -292,9 +284,8 @@ class ISCBull2NLLocObs(object):
                                                                 tt_residual))
                     except:
                         continue
-            ###
-            # WRITE NLLOC OBSERVATION FILE
-            ###
+
+            ### WRITE NLLOC OBSERVATION FILE ###
             outFile = open(os.path.join(output_dir, ''.join(('isc', eventID, '.nll'))), "w")
             # write origin block and phase header
             for line in lines[:3]:
