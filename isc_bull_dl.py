@@ -21,7 +21,7 @@ rect_group = parser.add_argument_group(title='RECT-rectangular search',
 rect_group.add_argument('--blat', dest='bot_lat', default=argparse.SUPPRESS, type=float,
                         help='Bottom latitude of rectangular region (-90 to 90).')
 rect_group.add_argument('--tlat', dest='top_lat', default=argparse.SUPPRESS, type=float,
-                        help='''Top latitude of rectangular region (-90 to 90).''')
+                        help='Top latitude of rectangular region (-90 to 90).')
 rect_group.add_argument('--llon', dest='left_lon', default=argparse.SUPPRESS, type=float,
                         help='Left longitude of rectangular region (-180 to 180).')
 rect_group.add_argument('--rlon', dest='right_lon', default=argparse.SUPPRESS, type=float,
