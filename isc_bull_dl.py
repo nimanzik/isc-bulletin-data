@@ -128,3 +128,6 @@ verify_search_opts(options)
 
 # download the ISC bulletin
 url_isc = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
+d = vars(args)
+x = ['='.join((k,str(d[k]))) for k in d.keys()]
+y = '&'.join(x)
