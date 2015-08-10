@@ -4,15 +4,14 @@ bulletin, and write a NLLoc phase file per event listed in the bulletin.
 """
 
 import argparse
+import urllib
 
 
 parser = argparse.ArgumentParser(prog='ISC_bulletin_dl',
                                  description='Download ISC bulletin dataset.')
 
 ### Geographic region ###
-parser.add_argument('--search',
-                    dest='searchshape',
-                    required=True,
+parser.add_argument('--search', dest='searchshape', required=True,
                     choices=['GLOBAL','RECT','CIRC','POLY'])
 
 ### RECT (rectangular) search type ###
@@ -51,25 +50,19 @@ negative (lat1,lon1,lat2,lon2,...,latN,lonN,lat1,lon1).''')
 ### Time range ###
 parser.add_argument('--syear', dest='start_year', type=int, required=True,
                     help='Starting year for events (1904 to 2015).')
-
 parser.add_argument('--smonth', dest='start_month', type=int, required=True,
                     help='Starting month for events (1 to 12).')
-
 parser.add_argument('--sday', dest='start_day', type=int, required=True,
                     help='Starting day for events (1 to 31).')
-
 parser.add_argument('--stime', dest='start_time', required=True,
                     help='Starting time for events HH:MM:SS (00:00:00 to 23:59:59).')
 
 parser.add_argument('--eyear', dest='end_year', type=int, required=True,
                     help='Ending year for events (1904 to 2015).')
-
 parser.add_argument('--emonth', dest='end_month', type=int, required=True,
                     help='Ending month for events (1 to 12).')
-
 parser.add_argument('--eday', dest='end_day', type=int, required=True,
                     help='Ending day for events (1 to 31).')
-
 parser.add_argument('--etime', dest='end_time', required=True,
                     help='Ending time for events HH:MM:SS (00:00:00 to 23:59:59).')
 
@@ -131,3 +124,7 @@ def verify_search_opts(options):
 
 options = get_search_opts(args.searchshape)
 verify_search_opts(options)
+
+
+# download the ISC bulletin
+url_isc = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
