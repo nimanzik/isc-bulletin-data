@@ -128,6 +128,10 @@ verify_search_opts(options)
 
 # download the ISC bulletin
 url_isc = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
-d = vars(args)
-x = ['='.join((k,str(d[k]))) for k in d.keys()]
-y = '&'.join(x)
+
+dummy_dic = vars(args)
+dummy_x = ['='.join((k,str(dummy_dic[k]))) for k in dummy_dic.keys()]
+dummy_y = '&'.join(dummy_x)
+
+url_search = url_isc + dummy_y
+fname, header = urllib.urlretrieve(url_search)
