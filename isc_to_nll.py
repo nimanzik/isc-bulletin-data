@@ -58,6 +58,11 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
+    def make_outdir(dirname):
+        os.mkdir(dirname)
+
+
+    @staticmethod
     def read_isc_staFile(isc_staFile):
         isc_alter2prime_dic = {}
         with open(isc_staFile, "r") as f:
@@ -148,10 +153,13 @@ class ISCBull2NLLocObs(object):
 
 
     @classmethod
-    def bulletin_parser(cls, bulletin_file, isc_staFile, gfn_staFile, Phases, output_dir):
+    def bulletin_parser(cls, bulletin_file, isc_staFile, gfn_staFile, Phases,
+                        output_dir=None):
         events_dic = {}
         stations = []
 
+        if not output_dir:
+            output_dir = "./isc_bulletin_nlloc_format"
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
