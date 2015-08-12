@@ -23,13 +23,31 @@ def check_file(filename):
         warnings.warn(msg)
     print "File %s was imported." % filename
 
-
 def check_phase(phases):
     if (not isinstance(phases, str) and
         not isinstance(phases, list)):
         msg = "The type of input phase is neither str nor list."
         warnings.warn(msg)
     print "The list of desired phases was imported."
+
+def print_reading(filename):
+    print "\n[...] Reading %s file..." % filename
+
+def print_done():
+    print "[ %s ] Done" % u'\u2713'
+
+def display_progress(total_size):
+    """Display a progress bar on the screen."""
+    last_length = 0
+    for i in range(25, total_size+1, 25)
+        if (i+1)%50 == 0 or (i+1)==nEvents:
+            sys.stdout.write('\b' * last_lenght)    # go back
+            sys.stdout.write(' ' * last_lenght)     # clear last name
+            sys.stdout.write('\b' * last_lenght)    # reposition
+            stdout_line = "/".join((str(i+1), str(nEvents)))
+            sys.stdout.write(stdout_line)
+            sys.stdout.flush()
+            last_lenght = len(stdout_line)
 
 
 class ISCBull2NLLocObs(object):
@@ -163,13 +181,13 @@ class ISCBull2NLLocObs(object):
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
-        print "\n[...] Reading ISC station file..."
+        print_reading('ISC stations')
         isc_alter2prime_dic = cls.read_isc_staFile(isc_staFile)
-        print "[ %s ] Done" % u'\u2713'
+        print_done()
 
-        print "[...] Reading GEOFON station file..."
+        print_reading('GEOFON stations')
         gfn_sta2net_dic = cls.read_gfn_staFile(gfn_staFile)
-        print "[ %s ] Done" % u'\u2713'
+        print_done()
 
         with open(bulletin_file, "r") as f:
             print "[...] Parsing the bulletin file..."
@@ -178,7 +196,7 @@ class ISCBull2NLLocObs(object):
             split_bulletin = re.split(r'\s+Event\s+', split_bulletin)[1:]
 
         nEvents = len(split_bulletin)
-        sys.stdout.write("Number of saved phase/arrival data files = ")
+        sys.stdout.write("Number of saved phase data files = ")
         last_lenght = 0
         for i, event in enumerate(split_bulletin):
             # Display a progress bar on the screen
@@ -300,7 +318,7 @@ class ISCBull2NLLocObs(object):
                 outFile.write(line + "\n")
             outFile.write("PHASE ID Ins Cmp On Pha  FM  Date      HrMn   Sec   " +\
                           "Err   ErrMag  Coda Amp Per  >  Res\n")
-            # write phase block
+            # write the phase block
             for k in sorted(phase_block_dic.keys(),
                             key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2])):
                 station, phase = k[:]
