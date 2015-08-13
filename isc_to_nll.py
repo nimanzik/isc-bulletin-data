@@ -17,23 +17,16 @@ from pandas import DataFrame
 
 
 def ckeck_dir(dirname):
-    assert isinstance(dirname, basestring), "need string or buffer."
+    assert isinstance(dirname, basestring), "dirname is not a string: %r" % dirname
 
 def check_file(filename):
-    if not isinstance(filename, basestring):
-        msg = "%s is not a file name." % filename
-        warnings.warn(msg)
-    if not os.path.exists(filename):
-        msg = "Warning: File %s does not exist." % filename
-        warnings.warn(msg)
-    print "File %s was imported." % filename
-
+    assert isinstance(filename, basestring), "filename is not a string: %r" filename
+    assert os.path.exists(filename), "filename does not exist: %s" % filename
+    print "Imported file: %s" % os.path.basename(filename)
 
 def check_phase(phases):
-    if (not isinstance(phases, str) and
-        not isinstance(phases, list)):
-        msg = "The type of input phase is neither str nor list."
-        warnings.warn(msg)
+    assert isinstance(phases, basestring) or isinstance(phases, list), '''The type
+of input phases are neither string nor list: %r''' % phases
     print "The list of desired phases was imported."
 
 
