@@ -6,13 +6,18 @@ data file (in NLLOC_OBS format) per event listed in the bulletin.
 """
 
 import os
+import sys
+import subprocess
 import re
 import warnings
 import datetime as dt
-import numpy as np
+from numpy import floor
+from numpy import mean
 from pandas import DataFrame
-import sys
 
+
+def ckeck_dir(dirname):
+    assert isinstance(dirname, basestring), "need string or buffer."
 
 def check_file(filename):
     if not isinstance(filename, basestring):
@@ -23,6 +28,7 @@ def check_file(filename):
         warnings.warn(msg)
     print "File %s was imported." % filename
 
+
 def check_phase(phases):
     if (not isinstance(phases, str) and
         not isinstance(phases, list)):
@@ -30,24 +36,55 @@ def check_phase(phases):
         warnings.warn(msg)
     print "The list of desired phases was imported."
 
+
 def print_reading(filename):
     print "\n[...] Reading %s file..." % filename
+
 
 def print_done():
     print "[ %s ] Done" % u'\u2713'
 
-def display_progress(total_size):
-    """Display a progress bar on the screen."""
-    last_length = 0
-    for i in range(25, total_size+1, 25)
-        if (i+1)%50 == 0 or (i+1)==nEvents:
-            sys.stdout.write('\b' * last_lenght)    # go back
-            sys.stdout.write(' ' * last_lenght)     # clear last name
-            sys.stdout.write('\b' * last_lenght)    # reposition
-            stdout_line = "/".join((str(i+1), str(nEvents)))
-            sys.stdout.write(stdout_line)
-            sys.stdout.flush()
-            last_lenght = len(stdout_line)
+
+class ProgressBar(object):
+    """
+    This is the ProgressBar class, which updates and prints a simple progress
+    bar on the screen as standard output.
+
+    :Example:
+
+    >>> pbar = ProgressBar(500)
+    >>> pbar.start()
+    >>> for i in xrange(1,501):
+    >>>     pbar.update(i, percentage=False)
+    >>> pbar.finish()
+    """
+
+    def __init__(self, max_value):
+        self.max_value = max_value
+
+    def start(self):
+        sys.stdout.write("[...] Parsing the bulletin file...\n")
+
+    def update(self, curr_value, percentage=True):
+        term_width = int(subprocess.check_output(['stty', 'size']).split()[1])
+        term_width -= 10
+        self.curr_value = curr_value
+        progress = int(floor(self.curr_value * 100.0 / self.max_value))
+        left = "\rProcessing"
+        if percentage:
+            right = "%d%%" % (progress)
+        else:
+            right = "%d/%d" % (self.curr_value, self.max_value)
+        bar_width = term_width - len(left) - len(right)
+        block = int(floor(progress/100.0 * bar_width))
+        pbar = "[%s%s]" % ("=" * block, " " * (bar_width-block))
+        pbar_line = ' '.join((left, pbar, right))
+        sys.stdout.write(pbar_line)
+        sys.stdout.flush()
+
+    def finish(self):
+        sys.stdout.write("\n[ %s ] Done..." % u'\u2713')
+
 
 
 class ISCBull2NLLocObs(object):
@@ -56,18 +93,18 @@ class ISCBull2NLLocObs(object):
     """
 
     # class attributes
-    isc2gfn_alias_dic = {"GRF":"GR_GRA1"  , "SJI":"IA_SWJI",
-                         "CTA":"IU_CTAO"  , "DEIG":"MX_DHIG",
-                         "KNMB":"TW_KMNB" , "MZBI":"GE_MSBI",
-                         "FLTG":"GE_FLT1" , "HMBC":"CX_HMBCX",
-                         "SPITS":"NO_SPA0", "GEC2A":"GR_GEC2",
-                         "KRKI":'IA_KRK'  , "MYLDM":"MY_LDM",
-                         "SIMRM":"RM_SIM" , "SLVN":"RM_SLV"}
+    __isc2gfn_alias_dic = {"GRF":"GR_GRA1"  , "SJI":"IA_SWJI",
+                           "CTA":"IU_CTAO"  , "DEIG":"MX_DHIG",
+                           "KNMB":"TW_KMNB" , "MZBI":"GE_MSBI",
+                           "FLTG":"GE_FLT1" , "HMBC":"CX_HMBCX",
+                           "SPITS":"NO_SPA0", "GEC2A":"GR_GEC2",
+                           "KRKI":'IA_KRK'  , "MYLDM":"MY_LDM",
+                           "SIMRM":"RM_SIM" , "SLVN":"RM_SLV"}
 
-    isc2gfn_duplicate_dic = {"IVI":"G_IVI" , "PTK":"KO_PTK",
-                             "PSI":"PS_PSI", "KWP":"GE_KWP",
-                             "SUW":"GE_SUW", "LAST":"GE_LAST",
-                             "SIVA":"GE_SIVA"}
+    __isc2gfn_duplicate_dic = {"IVI":"G_IVI" , "PTK":"KO_PTK",
+                               "PSI":"PS_PSI", "KWP":"GE_KWP",
+                               "SUW":"GE_SUW", "LAST":"GE_LAST",
+                               "SIVA":"GE_SIVA"}
 
 
     def __init__(self, events, stations):
@@ -76,12 +113,7 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def make_outdir(dirname):
-        os.mkdir(dirname)
-
-
-    @staticmethod
-    def read_isc_staFile(isc_staFile):
+    def __read_isc_staFile(isc_staFile):
         isc_alter2prime_dic = {}
         with open(isc_staFile, "r") as f:
             data = f.readlines()
@@ -97,7 +129,7 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def read_gfn_staFile(gfn_staFile):
+    def __read_gfn_staFile(gfn_staFile):
         gfn_sta2net_dic = {}
         with open(gfn_staFile, 'r') as f:
             for line in f:
@@ -108,7 +140,7 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def qual2err(phase, onset_quality):
+    def __qual2err(phase, onset_quality):
         """
         Quality to error mapping.
         The mapping of the quality of the phase picks in observation file
@@ -134,7 +166,7 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def average_pick(origin_date, origin_time, pick_list):
+    def __average_pick(origin_date, origin_time, pick_list):
         """
         This function calculates the average of a number of phase picks read by
         different ISC analysts for a given arrival time.
@@ -159,11 +191,11 @@ class ISCBull2NLLocObs(object):
             arrival_date = origin_date + dt.timedelta(days=0)
 
         onset_quality = '?'
-        pick_uncertainty = np.mean([x[-2] for x in pick_list])
+        pick_uncertainty = mean([x[-2] for x in pick_list])
 
         r = [x[-1] for x in pick_list if type(x[-1])==float]
         if any(r):
-            tt_residual = round(np.mean(r), 2)
+            tt_residual = round(mean(r), 2)
         else:
             tt_residual = 'N/A'
 
@@ -177,7 +209,8 @@ class ISCBull2NLLocObs(object):
         stations = []
 
         if not output_dir:
-            output_dir = "./isc_bulletin_nlloc_format"
+            output_dir = "./isc_data_nlloc_format"
+            os.mkdir(output_dir)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
@@ -190,27 +223,15 @@ class ISCBull2NLLocObs(object):
         print_done()
 
         with open(bulletin_file, "r") as f:
-            print "[...] Parsing the bulletin file..."
             bulletin = f.read()
             split_bulletin = re.split(r'\s+STOP\s+', bulletin)[0]
             split_bulletin = re.split(r'\s+Event\s+', split_bulletin)[1:]
 
         nEvents = len(split_bulletin)
-        sys.stdout.write("Number of saved phase data files = ")
-        last_lenght = 0
+        pbar = ProgressBar(nEvents)
+        pbar.start()
+
         for i, event in enumerate(split_bulletin):
-            # Display a progress bar on the screen
-            # ('\b' generally moves the cursor back by one space)
-            if (i+1)%50 == 0 or (i+1)==nEvents:
-                sys.stdout.write('\b' * last_lenght)    # go back
-                sys.stdout.write(' ' * last_lenght)     # clear last name
-                sys.stdout.write('\b' * last_lenght)    # reposition
-                stdout_line = "/".join((str(i+1), str(nEvents)))
-                sys.stdout.write(stdout_line)
-                sys.stdout.flush()
-                last_lenght = len(stdout_line)
-
-
             lines = event.splitlines()
             lines = filter(None, lines)    # remove the empty lines
 
@@ -337,6 +358,7 @@ class ISCBull2NLLocObs(object):
                                 dummy[3], str(dummy[4]).rjust(6))
                 outFile.write(dummy_line + '\n')
             outFile.close()
+            pbar.update(i+1)
 
-        print "[ %s ] Done\n" % u'\u2713'
+        pbar.finish()
         return cls(events, stations)
