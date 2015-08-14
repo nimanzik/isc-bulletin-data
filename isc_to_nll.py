@@ -1,5 +1,5 @@
 """
-Read and parse ISC bulletin of event data (in ISF format), and write a phase
+Read and parse ISC bulletin of earthquake data (in ISF format), and write a phase
 data file (in NLLOC_OBS format) per event listed in the bulletin.
 """
 
