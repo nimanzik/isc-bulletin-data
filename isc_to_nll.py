@@ -18,25 +18,30 @@ from pandas import DataFrame
 
 def ckeck_dir(dirname):
     assert isinstance(dirname, basestring), "dirname is not a string: %r" % dirname
+    if not os.path.exists(dirname):
+        try:
+            os.mkdir(dirname)
+        except OSError:
+            print "No such file or directory: %s" % dirname
+        except:
+            print "Unexpected error: ", sys.exc_info()[0]
+            raise
 
 def check_file(filename):
-    assert isinstance(filename, basestring), "filename is not a string: %r" filename
-    assert os.path.exists(filename), "filename does not exist: %s" % filename
+    assert isinstance(filename, basestring), "Need string or buffer: %r" filename
+    assert os.path.exists(filename), "No such file or directory: %s" % filename
     print "Imported file: %s" % os.path.basename(filename)
 
 def check_phase(phases):
-    assert isinstance(phases, basestring) or isinstance(phases, list), '''The type
-of input phases are neither string nor list: %r''' % phases
-    print "The list of desired phases was imported."
-
+    assert isinstance(phases, list), "Need a list: %r" % phases
+    for ph in phases:
+        assert isinstance(ph, basestring), "Need string or buffer: %r" % ph
 
 def print_reading(filename):
     print "\n[...] Reading %s file..." % filename
 
-
 def print_done():
     print "[ %s ] Done" % u'\u2713'
-
 
 class ProgressBar(object):
     """
@@ -204,6 +209,8 @@ class ISCBull2NLLocObs(object):
         if not output_dir:
             output_dir = "./isc_data_nlloc_format"
             os.mkdir(output_dir)
+        else:
+            check_dir(output_dir)
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
