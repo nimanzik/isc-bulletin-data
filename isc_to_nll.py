@@ -1,15 +1,12 @@
 """
 Read and parse ISC bulletin of event data (in ISF format), and write a phase
 data file (in NLLOC_OBS format) per event listed in the bulletin.
-
-@created: May 2015; Potsdam, Germany
 """
 
 import os
 import sys
 import subprocess
 import re
-import warnings
 import datetime as dt
 from numpy import floor
 from numpy import mean
@@ -28,7 +25,7 @@ def ckeck_dir(dirname):
             raise
 
 def check_file(filename):
-    assert isinstance(filename, basestring), "Need string or buffer: %r" filename
+    assert isinstance(filename, basestring), "Need string or buffer: %r" % filename
     assert os.path.exists(filename), "No such file or directory: %s" % filename
     print "Imported file: %s" % os.path.basename(filename)
 
@@ -177,7 +174,7 @@ class ISCBull2NLLocObs(object):
         :returns: time, date, uncertainty and residual for average pick
         """
         time_list = [x[2] for x in pick_list]
-        total = sum(t.hour*36e8 + t.minute*6e7 + t.second*1e6 + t.microsecond for t in time_list)
+        total = sum(t.hour*36e8 + t.minute*6e7 + t.second*1e6 + t.msecond for t in time_list)
         average =  total / len(time_list)
         sec, microsec = [int(x) for x in divmod(average, 1e6)]
         mn, sec = [int(x) for x in divmod(sec, 60)]
@@ -210,21 +207,19 @@ class ISCBull2NLLocObs(object):
             output_dir = "./isc_data_nlloc_format"
             os.mkdir(output_dir)
         else:
-            check_dir(output_dir)
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+            ckeck_dir(output_dir)
 
         print_reading('ISC stations')
-        isc_alter2prime_dic = cls.read_isc_staFile(isc_staFile)
+        isc_alter2prime_dic = cls.__read_isc_staFile(isc_staFile)
         print_done()
 
         print_reading('GEOFON stations')
-        gfn_sta2net_dic = cls.read_gfn_staFile(gfn_staFile)
+        gfn_sta2net_dic = cls.__read_gfn_staFile(gfn_staFile)
         print_done()
 
         with open(bulletin_file, "r") as f:
-            bulletin = f.read()
-            split_bulletin = re.split(r'\s+STOP\s+', bulletin)[0]
+            textdata = f.read()
+            split_bulletin = re.split(r'\s+STOP\s+', textdata)[0]
             split_bulletin = re.split(r'\s+Event\s+', split_bulletin)[1:]
 
         nEvents = len(split_bulletin)
@@ -325,10 +320,7 @@ class ISCBull2NLLocObs(object):
                         if (station, phase) not in phase_block_dic.keys():
                             phase_block_dic[station, phase] = []
                         phase_block_dic[station, phase].append((onset_quality,
-                                                                arrival_date,
-                                                                arrival_time,
-                                                                pick_uncertainty,
-                                                                tt_residual))
+                            arrival_date, arrival_time, pick_uncertainty, tt_residual))
                     except:
                         continue
 
@@ -340,25 +332,35 @@ class ISCBull2NLLocObs(object):
             outFile.write("PHASE ID Ins Cmp On Pha  FM  Date      HrMn   Sec   " +\
                           "Err   ErrMag  Coda Amp Per  >  Res\n")
             # write the phase block
-            for k in sorted(phase_block_dic.keys(),
-                            key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2])):
+            skeys = sorted(phase_block_dic.keys(), key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2]))
+            for k in skeys:
                 station, phase = k[:]
                 if len(phase_block_dic[k]) > 1:
                     pick_list = phase_block_dic[k]
-                    dummy = cls.average_pick(origin_date, origin_time, pick_list)
+                    pickdata = cls.average_pick(origin_date, origin_time, pick_list)
                 else:
-                    dummy = phase_block_dic[k][0]
+                    pickdata = phase_block_dic[k][0]
 
                 # ID, Ins, Cmp, On, Pha, FM, Date, HrMn, Sec, Err, ErrMag, Coda, Amp, Per > Res
-                dummy_line = "%s  ?  ?  %s  %s  ?  %4d%02d%02d  %02d%02d  %5.2f  GAU  %7.1f  -1  -1  -1  >  %s" \
-                             % (station.ljust(8), dummy[0], phase.ljust(5),
-                                dummy[1].year,dummy[1].month,dummy[1].day,
-                                dummy[2].hour,dummy[2].minute,
-                                dummy[2].second+(dummy[2].microsecond/1.0e6),
-                                dummy[3], str(dummy[4]).rjust(6))
-                outFile.write(dummy_line + '\n')
+                fmt = "%s  ?  ?  %s  %s  ?  %4d%02d%02d  %02d%02d  %02d.%02d  GAU  %7.1f  -1  -1  -1  >  %s\n"
+                new_line = str(fmt % (station.ljust(8),
+                                      pickdata[0],
+                                      phase.ljust(5),
+                                      pickdata[1].year,
+                                      pickdata[1].month,
+                                      pickdata[1].day,
+                                      pickdata[2].hour,
+                                      pickdata[2].minute,
+                                      pickdata[2].second,
+                                      pickdata[2].msecond/1.0e6,
+                                      pickdata[3],
+                                      str(pickdata[4]).rjust(6)))
+
+                outFile.write(new_line)
+
             outFile.close()
             pbar.update(i+1)
 
         pbar.finish()
+
         return cls(events, stations)
