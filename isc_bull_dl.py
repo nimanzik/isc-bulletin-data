@@ -5,6 +5,7 @@ bulletin, and write a NLLoc phase file per event listed in the bulletin.
 
 import argparse
 import urllib
+from itertools import chain
 
 
 parser = argparse.ArgumentParser(prog='ISC_bulletin_dl',
@@ -98,33 +99,30 @@ parser.add_argument('--DPmax', dest='max_def', default=argparse.SUPPRESS, type=i
 
 args = parser.parse_args()
 
-def get_search_opts(search_type):
+def get_search_options():
     """
-    :param search_type: Desired search type defining the geographic region
-    :type search_type: str
-    :returns: A list of dependent parameters (options) of search_type
+    Mapping each geographic search type to its dependent parameters.
     """
-    search = ('GLOBAL', 'RECT', 'CIRC', 'POLY')
-    glob_opts = None
-    rect_opts = ['bot_lat', 'top_lat', 'left_lon', 'right_lon']
-    circ_opts = ['ctr_lat', 'ctr_lon', 'max_dist_units', 'radius']
-    poly_opts = ['coordvals']
-    opts = (glob_opts, rect_opts, circ_opts, poly_opts)
-    search2opts = dict(zip(search, opts))
+    search2options = {'GLOBAL':None,
+                      'RECT':('bot_lat', 'top_lat', 'left_lon', 'right_lon'),
+                      'CIRC':('ctr_lat', 'ctr_lon', 'max_dist_units', 'radius'),
+                      'POLY':('coordvals')}
 
-    return search2opts[search_type]
+    return search2options
 
-def verify_search_opts(options):
+def verify_search_options():
     global parser
     global args
-    if not all([getattr(args,name) for name in options]):
+
+    search2options = get_search_options()
+    required = search2options.pop(args.searchshape)
+    conflicts = filter(None, search2options.values())
+    conflicts = list(chain(*conflicts))
+    if (not all([getattr(args,r) for r in required]) or
+       any([getattr(args,c) for c in conflicts])):
         msg = '''Missing argument(s) for defined search shape. Check the
         dependent parameters for your considered search type.'''
         parser.error(msg)
-
-options = get_search_opts(args.searchshape)
-verify_search_opts(options)
-
 
 # download the ISC bulletin
 url_isc = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
