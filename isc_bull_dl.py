@@ -3,133 +3,135 @@ This Python script is used to download ISC bulletin data, read and parse the
 bulletin, and write a NLLoc phase file per event listed in the bulletin.
 """
 
+
 import argparse
 import urllib
 from itertools import chain
 
+class Parser(argparse.ArgumentParser):
 
-parser = argparse.ArgumentParser(prog='ISC_bulletin_dl',
-                                 description='Download ISC bulletin dataset.')
+    # class attributes
+    __search2options = {'GLOBAL':None,
+                        'RECT':('bot_lat', 'top_lat', 'left_lon', 'right_lon'),
+                        'CIRC':('ctr_lat', 'ctr_lon', 'max_dist_units', 'radius'),
+                        'POLY':('coordvals')}
 
-### Geographic region ###
-parser.add_argument('--search', dest='searchshape', required=True,
-                    choices=['GLOBAL','RECT','CIRC','POLY'])
+    __query_client = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
 
-### RECT (rectangular) search type ###
-rect_group = parser.add_argument_group(title='RECT-rectangular search',
-                                       description='Dependent parameters for --search=RECT')
-rect_group.add_argument('--blat', dest='bot_lat', default=argparse.SUPPRESS, type=float,
-                        help='Bottom latitude of rectangular region (-90 to 90).')
-rect_group.add_argument('--tlat', dest='top_lat', default=argparse.SUPPRESS, type=float,
-                        help='Top latitude of rectangular region (-90 to 90).')
-rect_group.add_argument('--llon', dest='left_lon', default=argparse.SUPPRESS, type=float,
-                        help='Left longitude of rectangular region (-180 to 180).')
-rect_group.add_argument('--rlon', dest='right_lon', default=argparse.SUPPRESS, type=float,
-                        help='Right longitude of rectangular region (-180 to 180).')
+    def __init__(self, *args, **kwargs):
+        super(Parser, self).__init__(*args, **kwargs)
 
-### CIRC (circular) search type ###
-circ_group = parser.add_argument_group(title='CIRC-circular search',
-                                       description='Dependent parameters for --search=CIRC')
-circ_group.add_argument('--clat', dest='ctr_lat', default=argparse.SUPPRESS, type=float,
-                        help='Central latitude of circular region.')
-circ_group.add_argument('--clon', dest='ctr_lon', default=argparse.SUPPRESS, type=float,
-                        help='Central longitude of circular regio.')
-circ_group.add_argument('--units', dest='max_dist_units', choices=['deg', 'km'],
-                        help='Units of distance for a circular search.')
-circ_group.add_argument('--radius', dest='radius', default=argparse.SUPPRESS, type=float,
-                        help='''Radius for circular search region: 0 to 180 if
-                        --units=deg, 0 to 20015 if --units=km.''')
+    def verify_search_options(self):
+        self.args = self.parse_args()
+        required = Parser.__search2options.pop(self.args.searchshape)
+        conflicts = filter(None, Parser.__search2options.values())
+        conflicts = list(chain(*conflicts))
 
-### POLY (customised polygon) search type ###
-poly_group = parser.add_argument_group(title='POLY-polygon search',
-                                       description='Dependent parameters for --search=POLY')
-poly_group.add_argument('--coords', dest='coordvals', default=argparse.SUPPRESS,
-                        help='''Comma seperated list of coordinates for a
-desired polygon. Coordinates in the western and southern hemispheres should be
-negative (lat1,lon1,lat2,lon2,...,latN,lonN,lat1,lon1).''')
+        if (not all([getattr(self.args,r) for r in required]) or
+           any([getattr(self.args,c) for c in conflicts])):
+            msg = '''Missing argument(s) for defined search shape. Check the
+            dependent parameters for your considered search type.'''
+            self.error(msg)
 
-### Time range ###
-parser.add_argument('--syear', dest='start_year', type=int, required=True,
-                    help='Starting year for events (1904 to 2015).')
-parser.add_argument('--smonth', dest='start_month', type=int, required=True,
-                    help='Starting month for events (1 to 12).')
-parser.add_argument('--sday', dest='start_day', type=int, required=True,
-                    help='Starting day for events (1 to 31).')
-parser.add_argument('--stime', dest='start_time', required=True,
-                    help='Starting time for events HH:MM:SS (00:00:00 to 23:59:59).')
+    def download_bulletin(self):
+        args_dic = vars(self.args)
+        query_opts = ['='.join((k,str(v))) for (k,v) in args_dic.items()]
+        query_opts = "&".join(query_opts)
 
-parser.add_argument('--eyear', dest='end_year', type=int, required=True,
-                    help='Ending year for events (1904 to 2015).')
-parser.add_argument('--emonth', dest='end_month', type=int, required=True,
-                    help='Ending month for events (1 to 12).')
-parser.add_argument('--eday', dest='end_day', type=int, required=True,
-                    help='Ending day for events (1 to 31).')
-parser.add_argument('--etime', dest='end_time', required=True,
-                    help='Ending time for events HH:MM:SS (00:00:00 to 23:59:59).')
+        query_url = Parser.__query_client + query_opts
+        self.bulletin, header = urllib.urlretrieve(query_url)
 
-### Depth limits ###
-parser.add_argument('--Zmin', dest='min_dep', default=argparse.SUPPRESS, type=float,
-                    help='Minimum depth of events (km).')
-parser.add_argument('--Zmax', dest='max_dep', default=argparse.SUPPRESS, type=float,
-                    help='Maximum depth of events (km).')
-
-### Magnitude limits ###
-parser.add_argument('--Mmin', dest='min_mag', default=argparse.SUPPRESS, type=float,
-                    help='Minimum magnitude of events.')
-parser.add_argument('--Mmax', dest='max_mag', default=argparse.SUPPRESS, type=float,
-                    help='Maximum magnitude of events.')
-
-parser.add_argument('--Mtype', dest='req_mag_type', default=argparse.SUPPRESS,
-                    choices=['Any','MB','MS','MW','ML','MD'],
-                    help='''Specific magnitude types. The selected magnitude
-type will search for all possible magnitudes in that category (e.g. MB will
-search for mb, mB, Mb, mb1mx, etc).''')
-
-parser.add_argument('--Magcy', dest='req_mag_agcy', default=argparse.SUPPRESS,
-                    help='''Limit events to magnitudes computed by the selected
-                    agency: {Any, prime, CODE (specific agency code)}.''')
-
-### Defining phases limits ###
-parser.add_argument('--DPmin', dest='min_def', default=argparse.SUPPRESS, type=int,
-                    help='Minimum number of defining phases.')
-parser.add_argument('--DPmax', dest='max_def', default=argparse.SUPPRESS, type=int,
-                    help='Maximum number of defining phases.')
+        return self.bulletin
 
 
 
-args = parser.parse_args()
+if __name__ == "__main__":
+    parser = Parser(description='Download ISC bulletin dataset.')
+    ### Geographic region ###
+    parser.add_argument('--search', dest='searchshape', required=True,
+                        choices=['GLOBAL','RECT','CIRC','POLY'])
 
-def get_search_options():
-    """
-    Mapping each geographic search type to its dependent parameters.
-    """
-    search2options = {'GLOBAL':None,
-                      'RECT':('bot_lat', 'top_lat', 'left_lon', 'right_lon'),
-                      'CIRC':('ctr_lat', 'ctr_lon', 'max_dist_units', 'radius'),
-                      'POLY':('coordvals')}
+    ### RECT (rectangular) search type ###
+    rect_group = parser.add_argument_group(title='RECT-rectangular search',
+                                           description='Dependent parameters for --search=RECT')
+    rect_group.add_argument('--blat', dest='bot_lat', default=argparse.SUPPRESS, type=float,
+                            help='Bottom latitude of rectangular region (-90 to 90).')
+    rect_group.add_argument('--tlat', dest='top_lat', default=argparse.SUPPRESS, type=float,
+                            help='Top latitude of rectangular region (-90 to 90).')
+    rect_group.add_argument('--llon', dest='left_lon', default=argparse.SUPPRESS, type=float,
+                            help='Left longitude of rectangular region (-180 to 180).')
+    rect_group.add_argument('--rlon', dest='right_lon', default=argparse.SUPPRESS, type=float,
+                            help='Right longitude of rectangular region (-180 to 180).')
 
-    return search2options
+    ### CIRC (circular) search type ###
+    circ_group = parser.add_argument_group(title='CIRC-circular search',
+                                           description='Dependent parameters for --search=CIRC')
+    circ_group.add_argument('--clat', dest='ctr_lat', default=argparse.SUPPRESS, type=float,
+                            help='Central latitude of circular region.')
+    circ_group.add_argument('--clon', dest='ctr_lon', default=argparse.SUPPRESS, type=float,
+                            help='Central longitude of circular regio.')
+    circ_group.add_argument('--units', dest='max_dist_units', choices=['deg', 'km'],
+                            help='Units of distance for a circular search.')
+    circ_group.add_argument('--radius', dest='radius', default=argparse.SUPPRESS, type=float,
+                            help='''Radius for circular search region: 0 to 180 if
+                            --units=deg, 0 to 20015 if --units=km.''')
 
-def verify_search_options():
-    global parser
-    global args
+    ### POLY (customised polygon) search type ###
+    poly_group = parser.add_argument_group(title='POLY-polygon search',
+                                           description='Dependent parameters for --search=POLY')
+    poly_group.add_argument('--coords', dest='coordvals', default=argparse.SUPPRESS,
+                            help='''Comma seperated list of coordinates for a
+    desired polygon. Coordinates in the western and southern hemispheres should be
+    negative (lat1,lon1,lat2,lon2,...,latN,lonN,lat1,lon1).''')
 
-    search2options = get_search_options()
-    required = search2options.pop(args.searchshape)
-    conflicts = filter(None, search2options.values())
-    conflicts = list(chain(*conflicts))
-    if (not all([getattr(args,r) for r in required]) or
-       any([getattr(args,c) for c in conflicts])):
-        msg = '''Missing argument(s) for defined search shape. Check the
-        dependent parameters for your considered search type.'''
-        parser.error(msg)
+    ### Time range ###
+    parser.add_argument('--syear', dest='start_year', type=int, required=True,
+                        help='Starting year for events (1904 to 2015).')
+    parser.add_argument('--smonth', dest='start_month', type=int, required=True,
+                        help='Starting month for events (1 to 12).')
+    parser.add_argument('--sday', dest='start_day', type=int, required=True,
+                        help='Starting day for events (1 to 31).')
+    parser.add_argument('--stime', dest='start_time', required=True,
+                        help='Starting time for events HH:MM:SS (00:00:00 to 23:59:59).')
 
-# download the ISC bulletin
-url_isc = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
+    parser.add_argument('--eyear', dest='end_year', type=int, required=True,
+                        help='Ending year for events (1904 to 2015).')
+    parser.add_argument('--emonth', dest='end_month', type=int, required=True,
+                        help='Ending month for events (1 to 12).')
+    parser.add_argument('--eday', dest='end_day', type=int, required=True,
+                        help='Ending day for events (1 to 31).')
+    parser.add_argument('--etime', dest='end_time', required=True,
+                        help='Ending time for events HH:MM:SS (00:00:00 to 23:59:59).')
 
-dummy_dic = vars(args)
-dummy_x = ['='.join((k,str(dummy_dic[k]))) for k in dummy_dic.keys()]
-dummy_y = '&'.join(dummy_x)
+    ### Depth limits ###
+    parser.add_argument('--Zmin', dest='min_dep', default=argparse.SUPPRESS, type=float,
+                        help='Minimum depth of events (km).')
+    parser.add_argument('--Zmax', dest='max_dep', default=argparse.SUPPRESS, type=float,
+                        help='Maximum depth of events (km).')
 
-url_search = url_isc + dummy_y
-fname, header = urllib.urlretrieve(url_search)
+    ### Magnitude limits ###
+    parser.add_argument('--Mmin', dest='min_mag', default=argparse.SUPPRESS, type=float,
+                        help='Minimum magnitude of events.')
+    parser.add_argument('--Mmax', dest='max_mag', default=argparse.SUPPRESS, type=float,
+                        help='Maximum magnitude of events.')
+
+    parser.add_argument('--Mtype', dest='req_mag_type', default=argparse.SUPPRESS,
+                        choices=['Any','MB','MS','MW','ML','MD'],
+                        help='''Specific magnitude types. The selected magnitude
+    type will search for all possible magnitudes in that category (e.g. MB will
+    search for mb, mB, Mb, mb1mx, etc).''')
+
+    parser.add_argument('--Magcy', dest='req_mag_agcy', default=argparse.SUPPRESS,
+                        help='''Limit events to magnitudes computed by the selected
+                        agency: {Any, prime, CODE (specific agency code)}.''')
+
+    ### Defining phases limits ###
+    parser.add_argument('--DPmin', dest='min_def', default=argparse.SUPPRESS, type=int,
+                        help='Minimum number of defining phases.')
+    parser.add_argument('--DPmax', dest='max_def', default=argparse.SUPPRESS, type=int,
+                        help='Maximum number of defining phases.')
+
+
+    args = parser.parse_args()
+    parser.verify_search_options()
+    bulletin = parser.download_bulletin()
