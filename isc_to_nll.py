@@ -1,6 +1,6 @@
 """
-Read and parse ISC bulletin of earthquake data (in ISF format), and write a phase
-data file (in NLLOC_OBS format) per event listed in the bulletin.
+Read and parse ISC bulletin of earthquake data (in ISF format), and write a
+phase data file (in NLLOC_OBS format) per event listed in the bulletin.
 """
 
 import os
@@ -13,7 +13,7 @@ from numpy import mean
 from pandas import DataFrame
 
 
-def ckeck_dir(dirname):
+def verify_dir(dirname):
     assert isinstance(dirname, basestring), "dirname is not a string: %r" % dirname
     if not os.path.exists(dirname):
         try:
@@ -24,12 +24,12 @@ def ckeck_dir(dirname):
             print "Unexpected error: ", sys.exc_info()[0]
             raise
 
-def check_file(filename):
+def verify_file(filename):
     assert isinstance(filename, basestring), "Need string or buffer: %r" % filename
     assert os.path.exists(filename), "No such file or directory: %s" % filename
     print "Imported file: %s" % os.path.basename(filename)
 
-def check_phase(phases):
+def verify_phase(phases):
     assert isinstance(phases, list), "Need a list: %r" % phases
     for ph in phases:
         assert isinstance(ph, basestring), "Need string or buffer: %r" % ph
@@ -108,9 +108,9 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def __read_isc_staFile(isc_staFile):
+    def __read_isc_stations(isc_stafile):
         isc_alter2prime_dic = {}
-        with open(isc_staFile, "r") as f:
+        with open(isc_stafile, "r") as f:
             data = f.readlines()
             for line in data:
                 items = [x.strip() for x in line.split(',')]
@@ -124,9 +124,9 @@ class ISCBull2NLLocObs(object):
 
 
     @staticmethod
-    def __read_gfn_staFile(gfn_staFile):
+    def __read_gfn_stations(gfn_stafile):
         gfn_sta2net_dic = {}
-        with open(gfn_staFile, 'r') as f:
+        with open(gfn_stafile, 'r') as f:
             for line in f:
                 items = line.split()
                 network, station = items[:2]
@@ -198,7 +198,7 @@ class ISCBull2NLLocObs(object):
 
 
     @classmethod
-    def bulletin_parser(cls, bulletin_file, isc_staFile, gfn_staFile, Phases,
+    def bulletin_parser(cls, bulletin_file, isc_stafile, gfn_stafile, Phases,
                         output_dir=None):
         events_dic = {}
         stations = []
@@ -207,14 +207,15 @@ class ISCBull2NLLocObs(object):
             output_dir = "./isc_data_nlloc_format"
             os.mkdir(output_dir)
         else:
-            ckeck_dir(output_dir)
+            verify_dir(output_dir)
 
+        verify_file(isc_stafile)
         print_reading('ISC stations')
-        isc_alter2prime_dic = cls.__read_isc_staFile(isc_staFile)
+        isc_alter2prime_dic = cls.__read_isc_stations(isc_stafile)
         print_done()
 
         print_reading('GEOFON stations')
-        gfn_sta2net_dic = cls.__read_gfn_staFile(gfn_staFile)
+        gfn_sta2net_dic = cls.__read_gfn_stations(gfn_stafile)
         print_done()
 
         with open(bulletin_file, "r") as f:
@@ -303,7 +304,7 @@ class ISCBull2NLLocObs(object):
                         else:
                             tt_residual = "N/A"
 
-                        pick_uncertainty = cls.qual2err(phase, onset_quality)
+                        pick_uncertainty = cls.__qual2err(phase, onset_quality)
 
                         # To check if any station renaming must be done.
                         if station in isc_alter2prime_dic.keys():
@@ -326,7 +327,7 @@ class ISCBull2NLLocObs(object):
 
             ### WRITE NLLOC OBSERVATION FILE ###
             outFile = open(os.path.join(output_dir, ''.join(('isc', eventID, '.nll'))), "w")
-            # write origin block and phase header
+            # write the origin block and the phase header
             for line in lines[:3]:
                 outFile.write(line + "\n")
             outFile.write("PHASE ID Ins Cmp On Pha  FM  Date      HrMn   Sec   " +\
@@ -337,7 +338,7 @@ class ISCBull2NLLocObs(object):
                 station, phase = k[:]
                 if len(phase_block_dic[k]) > 1:
                     pick_list = phase_block_dic[k]
-                    pickdata = cls.average_pick(origin_date, origin_time, pick_list)
+                    pickdata = cls.__average_pick(origin_date, origin_time, pick_list)
                 else:
                     pickdata = phase_block_dic[k][0]
 

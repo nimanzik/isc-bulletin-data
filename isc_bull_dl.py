@@ -14,7 +14,7 @@ class Parser(argparse.ArgumentParser):
     __search2options = {'GLOBAL':None,
                         'RECT':('bot_lat', 'top_lat', 'left_lon', 'right_lon'),
                         'CIRC':('ctr_lat', 'ctr_lon', 'max_dist_units', 'radius'),
-                        'POLY':('coordvals')}
+                        'POLY':('coordvals',)}
 
     __query_client = "http://www.isc.ac.uk/cgi-bin/web-db-v4?"
 
@@ -28,14 +28,15 @@ class Parser(argparse.ArgumentParser):
         conflicts = list(chain(*conflicts))
 
         if (not all([getattr(self.args,r) for r in required]) or
-           any([getattr(self.args,c) for c in conflicts])):
+            any([hasattr(self.args,c) for c in conflicts])):
             msg = '''Missing argument(s) for defined search shape. Check the
             dependent parameters for your considered search type.'''
             self.error(msg)
 
     def download_bulletin(self):
         args_dic = vars(self.args)
-        query_opts = ['='.join((k,str(v))) for (k,v) in args_dic.items()]
+        args_dic.update(prime_only='on', include_phases='on', include_headers='on')
+        query_opts = ["=".join((k,str(v))) for (k,v) in args_dic.items()]
         query_opts = "&".join(query_opts)
 
         query_url = Parser.__query_client + query_opts
@@ -70,7 +71,7 @@ if __name__ == "__main__":
                             help='Central latitude of circular region.')
     circ_group.add_argument('--clon', dest='ctr_lon', default=argparse.SUPPRESS, type=float,
                             help='Central longitude of circular regio.')
-    circ_group.add_argument('--units', dest='max_dist_units', choices=['deg', 'km'],
+    circ_group.add_argument('--units', dest='max_dist_units', choices=['deg', 'km'], default=argparse.SUPPRESS,
                             help='Units of distance for a circular search.')
     circ_group.add_argument('--radius', dest='radius', default=argparse.SUPPRESS, type=float,
                             help='''Radius for circular search region: 0 to 180 if
