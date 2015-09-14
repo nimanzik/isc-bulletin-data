@@ -8,31 +8,10 @@ import sys
 import subprocess
 import re
 import datetime as dt
-from numpy import floor
-from numpy import mean
-from pandas import DataFrame
+import numpy as np
+import pandas as pd
+from util import InputError
 
-
-def verify_dir(dirname):
-    assert isinstance(dirname, basestring), "dirname is not a string: %r" % dirname
-    if not os.path.exists(dirname):
-        try:
-            os.mkdir(dirname)
-        except OSError:
-            print "No such file or directory: %s" % dirname
-        except:
-            print "Unexpected error: ", sys.exc_info()[0]
-            raise
-
-def verify_file(filename):
-    assert isinstance(filename, basestring), "Need string or buffer: %r" % filename
-    assert os.path.exists(filename), "No such file or directory: %s" % filename
-    print "Imported file: %s" % os.path.basename(filename)
-
-def verify_phase(phases):
-    assert isinstance(phases, list), "Need a list: %r" % phases
-    for ph in phases:
-        assert isinstance(ph, basestring), "Need string or buffer: %r" % ph
 
 def print_reading(filename):
     print "\n[...] Reading %s file..." % filename
@@ -64,14 +43,14 @@ class ProgressBar(object):
         term_width = int(subprocess.check_output(['stty', 'size']).split()[1])
         term_width -= 10
         self.curr_value = curr_value
-        progress = int(floor(self.curr_value * 100.0 / self.max_value))
+        progress = int(np.floor(self.curr_value * 100.0 / self.max_value))
         left = "\rProcessing"
         if percentage:
             right = "%d%%" % (progress)
         else:
             right = "%d/%d" % (self.curr_value, self.max_value)
         bar_width = term_width - len(left) - len(right)
-        block = int(floor(progress/100.0 * bar_width))
+        block = int(np.floor(progress/100.0 * bar_width))
         pbar = "[%s%s]" % ("=" * block, " " * (bar_width-block))
         pbar_line = ' '.join((left, pbar, right))
         sys.stdout.write(pbar_line)
@@ -81,12 +60,10 @@ class ProgressBar(object):
         sys.stdout.write("\n[ %s ] Done..." % u'\u2713')
 
 
-
 class ISCBull2NLLocObs(object):
     """
     .. todo:: determine indices of block start/end.
     """
-
     # class attributes
     __isc2gfn_alias_dic = {"GRF":"GR_GRA1"  , "SJI":"IA_SWJI",
                            "CTA":"IU_CTAO"  , "DEIG":"MX_DHIG",
@@ -106,7 +83,6 @@ class ISCBull2NLLocObs(object):
         self.events = events
         self.stations = stations
 
-
     @staticmethod
     def __read_isc_stations(isc_stafile):
         isc_alter2prime_dic = {}
@@ -122,7 +98,6 @@ class ISCBull2NLLocObs(object):
                     isc_alter2prime_dic[first_code] = second_code
         return isc_alter2prime_dic
 
-
     @staticmethod
     def __read_gfn_stations(gfn_stafile):
         gfn_sta2net_dic = {}
@@ -132,7 +107,6 @@ class ISCBull2NLLocObs(object):
                 network, station = items[:2]
                 gfn_sta2net_dic[station] = "_".join((network, station))
         return gfn_sta2net_dic
-
 
     @staticmethod
     def __qual2err(phase, onset_quality):
@@ -153,12 +127,11 @@ class ISCBull2NLLocObs(object):
         qual2err_nonP = {"i":0.5, "e":1.0, "_":2.0, "q":2.0}
 
         if phase.startswith("P") or phase=="p":
-            pick_uncertainty = qual2err_Ptype[onset_quality]
+            uncertainty = qual2err_Ptype[onset_quality]
         else:
-            pick_uncertainty = qual2err_nonP[onset_quality]
+            uncertainty = qual2err_nonP[onset_quality]
 
-        return pick_uncertainty
-
+        return uncertainty
 
     @staticmethod
     def __average_pick(origin_date, origin_time, pick_list):
@@ -186,30 +159,42 @@ class ISCBull2NLLocObs(object):
             arrival_date = origin_date + dt.timedelta(days=0)
 
         onset_quality = '?'
-        pick_uncertainty = mean([x[-2] for x in pick_list])
+        pick_uncertainty = np.mean([x[-2] for x in pick_list])
 
         r = [x[-1] for x in pick_list if type(x[-1])==float]
         if any(r):
-            tt_residual = round(mean(r), 2)
+            tt_residual = round(np.mean(r), 2)
         else:
             tt_residual = 'N/A'
 
         return (onset_quality, arrival_date, arrival_time, pick_uncertainty, tt_residual)
 
-
     @classmethod
     def bulletin_parser(cls, bulletin_file, isc_stafile, gfn_stafile, Phases,
-                        output_dir=None):
+                        outdir=None):
         events_dic = {}
         stations = []
 
-        if not output_dir:
-            output_dir = "./isc_data_nlloc_format"
-            os.mkdir(output_dir)
-        else:
-            verify_dir(output_dir)
+        for f in (bulletin_file, isc_stafile, gfn_stafile):
+            if not isinstance(f, basestring):
+                raise InputError(f, "Need string or buffer")
+            if not os.path.exists(f):
+                raise InputError(f, "No such file or directory")
 
-        verify_file(isc_stafile)
+        if not outdir:
+            outdir = "./isc_data_nlloc_format"
+            os.mkdir(outdir)
+        elif not isinstance(outdir):
+            raise InputError(outdir, "Need string or buffer")
+        elif not os.path.exists(outdir):
+            raise InputError(outdir, "No such file or directory")
+
+        if not isinstance(Phases, list):
+            Phases = list(Phases)
+        for ph in Phases:
+            if not isinstance(ph, basestring):
+                raise InputError(ph, "Need a string or buffer")
+
         print_reading('ISC stations')
         isc_alter2prime_dic = cls.__read_isc_stations(isc_stafile)
         print_done()
@@ -229,8 +214,8 @@ class ISCBull2NLLocObs(object):
 
         for i, event in enumerate(split_bulletin):
             lines = event.splitlines()
-            lines = filter(None, lines)    # remove the empty lines
-
+            # remove the empty lines
+            lines = filter(None, lines)
             eventID = lines[0].split()[0]
 
             ### READ ORIGIN BLOCK ###
@@ -271,7 +256,7 @@ class ISCBull2NLLocObs(object):
                     pass
 
             events_dic[eventID] = (origin_date, origin_time, elat, elon, edepth)
-            events = DataFrame.from_dict(events_dic, orient='index')
+            events = pd.DataFrame.from_dict(events_dic, orient='index')
             events.columns = ["Date", "Time", "Latitude", "Longitude", "Depth"]
             events.index.names = ["Event"]
 
@@ -306,7 +291,7 @@ class ISCBull2NLLocObs(object):
 
                         pick_uncertainty = cls.__qual2err(phase, onset_quality)
 
-                        # To check if any station renaming must be done.
+                        # To check if any station renaming should be done.
                         if station in isc_alter2prime_dic.keys():
                             station = isc_alter2prime_dic[station]
                         if station in cls.isc2gfn_alias_dic.keys():
@@ -326,9 +311,9 @@ class ISCBull2NLLocObs(object):
                         continue
 
             ### WRITE NLLOC OBSERVATION FILE ###
-            outFile = open(os.path.join(output_dir, ''.join(('isc', eventID, '.nll'))), "w")
-            # write the origin block and the phase header
-            for line in lines[:3]:
+            outFile = open(os.path.join(outdir, ''.join(('isc', eventID, '.nll'))), "w")
+            # write the origin block and phase header
+            for line in lines[0:3]:
                 outFile.write(line + "\n")
             outFile.write("PHASE ID Ins Cmp On Pha  FM  Date      HrMn   Sec   " +\
                           "Err   ErrMag  Coda Amp Per  >  Res\n")
@@ -344,18 +329,10 @@ class ISCBull2NLLocObs(object):
 
                 # ID, Ins, Cmp, On, Pha, FM, Date, HrMn, Sec, Err, ErrMag, Coda, Amp, Per > Res
                 fmt = "%s  ?  ?  %s  %s  ?  %4d%02d%02d  %02d%02d  %02d.%02d  GAU  %7.1f  -1  -1  -1  >  %s\n"
-                new_line = str(fmt % (station.ljust(8),
-                                      pickdata[0],
-                                      phase.ljust(5),
-                                      pickdata[1].year,
-                                      pickdata[1].month,
-                                      pickdata[1].day,
-                                      pickdata[2].hour,
-                                      pickdata[2].minute,
-                                      pickdata[2].second,
-                                      pickdata[2].msecond/1.0e6,
-                                      pickdata[3],
-                                      str(pickdata[4]).rjust(6)))
+                new_line = str(fmt % (station.ljust(8), pickdata[0], phase.ljust(5),
+                        pickdata[1].year, pickdata[1].month, pickdata[1].day,
+                        pickdata[2].hour, pickdata[2].minute, pickdata[2].second,
+                        pickdata[2].msecond/1.0e6, pickdata[3], str(pickdata[4]).rjust(6)))
 
                 outFile.write(new_line)
 
