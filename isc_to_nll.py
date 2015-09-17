@@ -13,12 +13,6 @@ import pandas as pd
 from util import InputError
 
 
-def print_reading(filename):
-    print "\n[...] Reading %s file..." % filename
-
-def print_done():
-    print "[ %s ] Done" % u'\u2713'
-
 class ProgressBar(object):
     """
     This is the ProgressBar class, which updates and prints a simple progress
@@ -57,7 +51,7 @@ class ProgressBar(object):
         sys.stdout.flush()
 
     def finish(self):
-        sys.stdout.write("\n[ %s ] Done..." % u'\u2713')
+        sys.stdout.write("\n[ %s ] Done\n" % u'\u2713')
 
 
 class ISC2NLLoc(object):
@@ -178,7 +172,7 @@ class ISC2NLLoc(object):
         if not outdir:
             outdir = "./isc_data_nlloc_format"
             os.mkdir(outdir)
-        elif not isinstance(outdir):
+        elif not isinstance(outdir, basestring):
             raise InputError(outdir, "Need string or buffer")
         elif not os.path.exists(outdir):
             raise InputError(outdir, "No such file or directory")
@@ -189,13 +183,8 @@ class ISC2NLLoc(object):
             if not isinstance(ph, basestring):
                 raise InputError(ph, "Need a string or buffer")
 
-        print_reading('ISC stations')
         isc_alter2prime_dic = cls.__read_isc_stations(isc_stafile)
-        print_done()
-
-        print_reading('GEOFON stations')
         gfn_sta2net_dic = cls.__read_gfn_stations(gfn_stafile)
-        print_done()
 
         with open(bulletin_file, "r") as f:
             textdata = f.read()
@@ -207,8 +196,9 @@ class ISC2NLLoc(object):
         pbar.start()
 
         eindex = range(len(split_bulletin))
-        ecolumns = ['Time', 'Lat', 'Lon', 'Depth']
+        ecolumns = ['Origin-Time', 'Lat', 'Lon', 'Depth']
         events = pd.DataFrame(index=eindex, columns=ecolumns)
+        events.index.names = ['Event-ID']
         for i, event in enumerate(split_bulletin):
             lines = event.splitlines()
             # remove empty lines
@@ -220,7 +210,7 @@ class ISC2NLLoc(object):
 
             odate = dt.datetime.strptime(origin_block[0:10].strip(), "%Y/%m/%d")
             otime = dt.datetime.strptime(origin_block[11:22].strip(), "%H:%M:%S.%f")
-            origin_time = dt.datetime.combine(odate, otime)
+            origin_time = dt.datetime.combine(odate, otime.time())
             otime_fixflag = origin_block[22].strip()
             otime_err = origin_block[24:29].strip()
             if any(otime_err):
@@ -252,7 +242,7 @@ class ISC2NLLoc(object):
                 except:
                     pass
 
-            events.ix[i, columns] = origin_time, elat, elon, edepth
+            events.ix[i, ecolumns] = origin_time, elat, elon, edepth
             events.rename(index={i:eventID}, inplace=True)
 
             ### READ PHASE BLOCK ###
@@ -278,7 +268,7 @@ class ISC2NLLoc(object):
                             adate = origin_time.date() + dt.timedelta(days=1)
                         else:
                             adate = origin_time.date()
-                        arrival_time = dt.datetime.combine(adate, atime)
+                        arrival_time = dt.datetime.combine(adate, atime.time())
 
                         try:
                             res = float(res)
@@ -291,10 +281,10 @@ class ISC2NLLoc(object):
                         if staCode in isc_alter2prime_dic.keys():
                             staCode = isc_alter2prime_dic[staCode]
 
-                        if staCode in cls.isc2gfn_alias_dic.keys():
-                            staCode = cls.isc2gfn_alias_dic[staCode]
-                        elif staCode in cls.isc2gfn_duplicate_dic.keys():
-                            staCode = cls.isc2gfn_duplicate_dic[staCode]
+                        if staCode in cls.__isc2gfn_alias_dic.keys():
+                            staCode = cls.__isc2gfn_alias_dic[staCode]
+                        elif staCode in cls.__isc2gfn_duplicate_dic.keys():
+                            staCode = cls.__isc2gfn_duplicate_dic[staCode]
                         elif staCode in gfn_sta2net_dic.keys():
                             staCode = gfn_sta2net_dic[staCode]
 
@@ -303,11 +293,12 @@ class ISC2NLLoc(object):
 
                         arrData.ix[j, columns] = onset, phase, arrival_time, uncertainty, res
                         arrData.Time = pd.to_datetime(arrData.Time)
-                        arrData.rename(index={j:staCode}, inplace=True)
+                        arrData.rename(index={j:staCode.ljust(8)}, inplace=True)
                     except:
                         continue
 
             arrData.dropna(axis=0, how='all', inplace=True)
+            arrData.Time = pd.to_datetime(arrData.Time)
             arrData['Err'] = 'GAU'
             arrData['Ins'], arrData['Cmp'], arrData['FM'] = ['?']*3
             arrData['Coda'], arrData['Amp'], arrData['Per'] = [-1]*3
@@ -318,14 +309,11 @@ class ISC2NLLoc(object):
             with open(outfile, 'w') as f:
                 # header
                 for line in lines[0:3]:
-                    outfile.write(line + '\n')
+                    f.write(line + '\n')
 
             arrData.to_csv(outfile, mode='a', sep='\t', float_format='%6.2f',
                            index_label='PHASE ID', date_format="%Y%m%d %H%M %S.%f",
                            columns=['Ins','Cmp','On','Phase','FM','Time','Err','ErrMag','Coda','Amp','Per'])
-
-            # sort the data
-            #skeys = sorted(phase_block_dic.keys(), key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2]))
 
             pbar.update(i+1)
         pbar.finish()
