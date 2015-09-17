@@ -60,23 +60,18 @@ class ProgressBar(object):
         sys.stdout.write("\n[ %s ] Done..." % u'\u2713')
 
 
-class ISCBull2NLLocObs(object):
+class ISC2NLLoc(object):
     """
     .. todo:: determine indices of block start/end.
     """
     # class attributes
-    __isc2gfn_alias_dic = {"GRF":"GR_GRA1"  , "SJI":"IA_SWJI",
-                           "CTA":"IU_CTAO"  , "DEIG":"MX_DHIG",
-                           "KNMB":"TW_KMNB" , "MZBI":"GE_MSBI",
-                           "FLTG":"GE_FLT1" , "HMBC":"CX_HMBCX",
-                           "SPITS":"NO_SPA0", "GEC2A":"GR_GEC2",
-                           "KRKI":'IA_KRK'  , "MYLDM":"MY_LDM",
-                           "SIMRM":"RM_SIM" , "SLVN":"RM_SLV"}
+    __isc2gfn_alias_dic = {"GRF":"GR_GRA1"  , "SJI":"IA_SWJI", "CTA":"IU_CTAO",
+        "DEIG":"MX_DHIG", "KNMB":"TW_KMNB" , "MZBI":"GE_MSBI", "FLTG":"GE_FLT1",
+        "HMBC":"CX_HMBCX", "SPITS":"NO_SPA0", "GEC2A":"GR_GEC2", "KRKI":'IA_KRK',
+        "MYLDM":"MY_LDM", "SIMRM":"RM_SIM" , "SLVN":"RM_SLV"}
 
-    __isc2gfn_duplicate_dic = {"IVI":"G_IVI" , "PTK":"KO_PTK",
-                               "PSI":"PS_PSI", "KWP":"GE_KWP",
-                               "SUW":"GE_SUW", "LAST":"GE_LAST",
-                               "SIVA":"GE_SIVA"}
+    __isc2gfn_duplicate_dic = {"IVI":"G_IVI" , "PTK":"KO_PTK", "PSI":"PS_PSI",
+        "KWP":"GE_KWP", "SUW":"GE_SUW", "LAST":"GE_LAST", "SIVA":"GE_SIVA"}
 
 
     def __init__(self, events, stations):
@@ -104,12 +99,12 @@ class ISCBull2NLLocObs(object):
         with open(gfn_stafile, 'r') as f:
             for line in f:
                 items = line.split()
-                network, station = items[:2]
-                gfn_sta2net_dic[station] = "_".join((network, station))
+                net, sta = items[:2]
+                gfn_sta2net_dic[sta] = "_".join((net, sta))
         return gfn_sta2net_dic
 
     @staticmethod
-    def __qual2err(phase, onset_quality):
+    def _qual2err(phase, onset):
         """
         Quality to error mapping.
         The mapping of the quality of the phase picks in observation file
@@ -127,22 +122,22 @@ class ISCBull2NLLocObs(object):
         qual2err_nonP = {"i":0.5, "e":1.0, "_":2.0, "q":2.0}
 
         if phase.startswith("P") or phase=="p":
-            uncertainty = qual2err_Ptype[onset_quality]
+            uncertainty = qual2err_Ptype[onset]
         else:
-            uncertainty = qual2err_nonP[onset_quality]
+            uncertainty = qual2err_nonP[onset]
 
         return uncertainty
 
     @staticmethod
-    def __average_pick(origin_date, origin_time, pick_list):
+    def __average_pick(odate, otime, pick_list):
         """
         This function calculates the average of a number of phase picks read by
         different ISC analysts for a given arrival time.
 
-        :param origin_date: the origin date of the earthquake event
-        :type origin_date: `datetime.date` object
-        :param origin_time: the origin time of the earthquake event
-        :type origin_time: `datetime.time` object
+        :param odate: the origin date of the earthquake event
+        :type odate: `datetime.date` object
+        :param otime: the origin time of the earthquake event
+        :type otime: `datetime.time` object
         :param pick_list: list of tuples of (onsetQual, arrDate, arrTime, pickErr, ttRes)
         :returns: time, date, uncertainty and residual for average pick
         """
@@ -152,27 +147,26 @@ class ISCBull2NLLocObs(object):
         sec, microsec = [int(x) for x in divmod(average, 1e6)]
         mn, sec = [int(x) for x in divmod(sec, 60)]
         hr, mn = [int(x) for x in divmod(mn, 60)]
-        arrival_time = dt.time(hr, mn, sec, microsec)
-        if arrival_time < origin_time:
-            arrival_date = origin_date + dt.timedelta(days=1)
+        arrtime = dt.time(hr, mn, sec, microsec)
+        if arrtime < otime:
+            arrdate = odate + dt.timedelta(days=1)
         else:
-            arrival_date = origin_date + dt.timedelta(days=0)
+            arrdate = odate + dt.timedelta(days=0)
 
-        onset_quality = '?'
-        pick_uncertainty = np.mean([x[-2] for x in pick_list])
+        onset = '?'
+        uncertainty = np.mean([x[-2] for x in pick_list])
 
         r = [x[-1] for x in pick_list if type(x[-1])==float]
         if any(r):
-            tt_residual = round(np.mean(r), 2)
+            tt_res = round(np.mean(r), 2)
         else:
-            tt_residual = 'N/A'
+            tt_res = np.nan
 
-        return (onset_quality, arrival_date, arrival_time, pick_uncertainty, tt_residual)
+        return (onset, arrdate, arrtime, uncertainty, tt_res)
 
     @classmethod
     def bulletin_parser(cls, bulletin_file, isc_stafile, gfn_stafile, Phases,
                         outdir=None):
-        events_dic = {}
         stations = []
 
         for f in (bulletin_file, isc_stafile, gfn_stafile):
@@ -212,18 +206,21 @@ class ISCBull2NLLocObs(object):
         pbar = ProgressBar(nEvents)
         pbar.start()
 
+        eindex = range(len(split_bulletin))
+        ecolumns = ['Time', 'Lat', 'Lon', 'Depth']
+        events = pd.DataFrame(index=eindex, columns=ecolumns)
         for i, event in enumerate(split_bulletin):
             lines = event.splitlines()
-            # remove the empty lines
+            # remove empty lines
             lines = filter(None, lines)
             eventID = lines[0].split()[0]
 
             ### READ ORIGIN BLOCK ###
             origin_block = lines[2]
 
-            origin_date = dt.datetime.strptime(origin_block[0:10].strip(), "%Y/%m/%d")
-            origin_time = dt.datetime.strptime(origin_block[11:22].strip(), "%H:%M:%S.%f")
-            origin_time = origin_time.time()
+            odate = dt.datetime.strptime(origin_block[0:10].strip(), "%Y/%m/%d")
+            otime = dt.datetime.strptime(origin_block[11:22].strip(), "%H:%M:%S.%f")
+            origin_time = dt.datetime.combine(odate, otime)
             otime_fixflag = origin_block[22].strip()
             otime_err = origin_block[24:29].strip()
             if any(otime_err):
@@ -255,90 +252,82 @@ class ISCBull2NLLocObs(object):
                 except:
                     pass
 
-            events_dic[eventID] = (origin_date, origin_time, elat, elon, edepth)
-            events = pd.DataFrame.from_dict(events_dic, orient='index')
-            events.columns = ["Date", "Time", "Latitude", "Longitude", "Depth"]
-            events.index.names = ["Event"]
+            events.ix[i, columns] = origin_time, elat, elon, edepth
+            events.rename(index={i:eventID}, inplace=True)
 
             ### READ PHASE BLOCK ###
             phase_block = lines[4:]
-            phase_block_dic = {}
-            for line in phase_block:
-                station = line[0:5].strip()
+            index = range(len(phase_block))
+            columns = ['On', 'Phase', 'Time', 'ErrMag', 'Residual']
+            arrData = pd.DataFrame(index=index, columns=columns)
+            for j,line in enumerate(phase_block):
+                staCode = line[0:5].strip()
                 phase = line[19:27].strip()
-                tt_residual = line[41:46].strip()
-                onset_quality = line[101]
+                res = line[41:46].strip()
+                onset = line[101]
 
-                if station.isalnum() and phase.isalnum() and phase in Phases:
+                if staCode.isalnum() and phase.isalnum() and phase in Phases:
                     try:
                         try:
-                            arrival_time = dt.datetime.strptime(line[28:40].strip(), "%H:%M:%S.%f")
+                            atime = dt.datetime.strptime(line[28:40].strip(), "%H:%M:%S.%f")
                         except:
-                            arrival_time = dt.datetime.strptime(line[28:40].strip(), "%H:%M:%S")
-                        arrival_time = arrival_time.time()
-                        # To compare the arrival times in order to check
-                        # whether a one-day jump in date (24 hours) is needed
+                            atime = dt.datetime.strptime(line[28:40].strip(), "%H:%M:%S")
+                        # check whether a one-day jump in date (24 hours) is needed
                         # for those phases arriving after midnight (00:00:00 am).
-                        if arrival_time < origin_time:
-                            arrival_date = origin_date + dt.timedelta(days=1)
+                        if atime.time() < origin_time.time():
+                            adate = origin_time.date() + dt.timedelta(days=1)
                         else:
-                            arrival_date = origin_date + dt.timedelta(days=0)
+                            adate = origin_time.date()
+                        arrival_time = dt.datetime.combine(adate, atime)
 
-                        if any(tt_residual):
-                            tt_residual = float(tt_residual)
-                        else:
-                            tt_residual = "N/A"
+                        try:
+                            res = float(res)
+                        except ValueError:
+                            res = np.nan
 
-                        pick_uncertainty = cls.__qual2err(phase, onset_quality)
+                        uncertainty = cls._qual2err(phase, onset)
 
                         # To check if any station renaming should be done.
-                        if station in isc_alter2prime_dic.keys():
-                            station = isc_alter2prime_dic[station]
-                        if station in cls.isc2gfn_alias_dic.keys():
-                            station = cls.isc2gfn_alias_dic[station]
-                        elif station in cls.isc2gfn_duplicate_dic.keys():
-                            station = cls.isc2gfn_duplicate_dic[station]
-                        elif station in gfn_sta2net_dic.keys():
-                            station = gfn_sta2net_dic[station]
+                        if staCode in isc_alter2prime_dic.keys():
+                            staCode = isc_alter2prime_dic[staCode]
 
-                        if station not in stations:
-                            stations.append(station)
-                        if (station, phase) not in phase_block_dic.keys():
-                            phase_block_dic[station, phase] = []
-                        phase_block_dic[station, phase].append((onset_quality,
-                            arrival_date, arrival_time, pick_uncertainty, tt_residual))
+                        if staCode in cls.isc2gfn_alias_dic.keys():
+                            staCode = cls.isc2gfn_alias_dic[staCode]
+                        elif staCode in cls.isc2gfn_duplicate_dic.keys():
+                            staCode = cls.isc2gfn_duplicate_dic[staCode]
+                        elif staCode in gfn_sta2net_dic.keys():
+                            staCode = gfn_sta2net_dic[staCode]
+
+                        if staCode not in stations:
+                            stations.append(staCode)
+
+                        arrData.ix[j, columns] = onset, phase, arrival_time, uncertainty, res
+                        arrData.Time = pd.to_datetime(arrData.Time)
+                        arrData.rename(index={j:staCode}, inplace=True)
                     except:
                         continue
 
-            ### WRITE NLLOC OBSERVATION FILE ###
-            outFile = open(os.path.join(outdir, ''.join(('isc', eventID, '.nll'))), "w")
-            # write the origin block and phase header
-            for line in lines[0:3]:
-                outFile.write(line + "\n")
-            outFile.write("PHASE ID Ins Cmp On Pha  FM  Date      HrMn   Sec   " +\
-                          "Err   ErrMag  Coda Amp Per  >  Res\n")
-            # write the phase block
-            skeys = sorted(phase_block_dic.keys(), key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2]))
-            for k in skeys:
-                station, phase = k[:]
-                if len(phase_block_dic[k]) > 1:
-                    pick_list = phase_block_dic[k]
-                    pickdata = cls.__average_pick(origin_date, origin_time, pick_list)
-                else:
-                    pickdata = phase_block_dic[k][0]
+            arrData.dropna(axis=0, how='all', inplace=True)
+            arrData['Err'] = 'GAU'
+            arrData['Ins'], arrData['Cmp'], arrData['FM'] = ['?']*3
+            arrData['Coda'], arrData['Amp'], arrData['Per'] = [-1]*3
 
-                # ID, Ins, Cmp, On, Pha, FM, Date, HrMn, Sec, Err, ErrMag, Coda, Amp, Per > Res
-                fmt = "%s  ?  ?  %s  %s  ?  %4d%02d%02d  %02d%02d  %02d.%02d  GAU  %7.1f  -1  -1  -1  >  %s\n"
-                new_line = str(fmt % (station.ljust(8), pickdata[0], phase.ljust(5),
-                        pickdata[1].year, pickdata[1].month, pickdata[1].day,
-                        pickdata[2].hour, pickdata[2].minute, pickdata[2].second,
-                        pickdata[2].msecond/1.0e6, pickdata[3], str(pickdata[4]).rjust(6)))
+            # final step -- write arrival data to ascii file
+            outfile = ''.join(('isc', eventID, '.nll'))
+            outfile = os.path.join(outdir, outfile)
+            with open(outfile, 'w') as f:
+                # header
+                for line in lines[0:3]:
+                    outfile.write(line + '\n')
 
-                outFile.write(new_line)
+            arrData.to_csv(outfile, mode='a', sep='\t', float_format='%6.2f',
+                           index_label='PHASE ID', date_format="%Y%m%d %H%M %S.%f",
+                           columns=['Ins','Cmp','On','Phase','FM','Time','Err','ErrMag','Coda','Amp','Per'])
 
-            outFile.close()
+            # sort the data
+            #skeys = sorted(phase_block_dic.keys(), key=lambda x: (phase_block_dic[x][0][1], phase_block_dic[x][0][2]))
+
             pbar.update(i+1)
-
         pbar.finish()
 
         return cls(events, stations)
