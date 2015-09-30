@@ -1,6 +1,13 @@
+# -*- coding: utf-8 -*-
 """
-Read and parse ISC bulletin of earthquake data (in ISF format), and write a
+Read and parse ISC bulletin of earthquake data (in ISF format) and write a
 phase data file (in NLLOC_OBS format) per event listed in the bulletin.
+
+:version: 0.0.1
+:author:
+    - Nima Nooshiri
+:contact:
+    - nooshiri@gfz-potsdam.de
 """
 
 import os
@@ -8,8 +15,10 @@ import sys
 import subprocess
 import re
 import datetime as dt
+
 import numpy as np
 import pandas as pd
+
 from util import InputError
 
 
